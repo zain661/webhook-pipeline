@@ -1,6 +1,6 @@
-import { db } from "../db/client";
-import { delivery_attempts } from "../db/schema";
-import type { PipelineSubscriber } from "../types";
+import { db } from '../db/client';
+import { delivery_attempts } from '../db/schema';
+import type { PipelineSubscriber } from '../types';
 
 const MAX_ATTEMPTS = 4;
 
@@ -11,12 +11,12 @@ export async function deliverToSubscriber(
   jobId: string,
   subscriber: PipelineSubscriber,
   result: Record<string, unknown>,
-  attemptNumber: number = 1,
+  attemptNumber: number = 1
 ): Promise<void> {
   try {
     const response = await fetch(subscriber.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(result),
     });
 
@@ -24,7 +24,7 @@ export async function deliverToSubscriber(
     await db.insert(delivery_attempts).values({
       job_id: jobId,
       subscriber_url: subscriber.url,
-      status: response.ok ? "success" : "failed",
+      status: response.ok ? 'success' : 'failed',
       attempt_number: String(attemptNumber),
       response_code: String(response.status),
     });
@@ -33,7 +33,7 @@ export async function deliverToSubscriber(
     if (!response.ok && attemptNumber < MAX_ATTEMPTS) {
       const delay = BACKOFF_DELAYS[attemptNumber - 1] ?? 30_000;
       console.log(
-        `Delivery failed, retrying in ${delay / 1000}s (attempt ${attemptNumber}/${MAX_ATTEMPTS})`,
+        `Delivery failed, retrying in ${delay / 1000}s (attempt ${attemptNumber}/${MAX_ATTEMPTS})`
       );
 
       setTimeout(() => {
@@ -45,7 +45,7 @@ export async function deliverToSubscriber(
     await db.insert(delivery_attempts).values({
       job_id: jobId,
       subscriber_url: subscriber.url,
-      status: "failed",
+      status: 'failed',
       attempt_number: String(attemptNumber),
       error: String(err),
     });
@@ -53,7 +53,7 @@ export async function deliverToSubscriber(
     if (attemptNumber < MAX_ATTEMPTS) {
       const delay = BACKOFF_DELAYS[attemptNumber - 1] ?? 30_000;
       console.log(
-        `Network error, retrying in ${delay / 1000}s (attempt ${attemptNumber}/${MAX_ATTEMPTS})`,
+        `Network error, retrying in ${delay / 1000}s (attempt ${attemptNumber}/${MAX_ATTEMPTS})`
       );
 
       setTimeout(() => {

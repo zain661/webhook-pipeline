@@ -1,15 +1,9 @@
-import { eq } from "drizzle-orm";
-import { db } from "../client";
-import { pipelines, pipeline_subscribers } from "../schema";
-import type {
-  CreatePipelineBody,
-  Pipeline,
-  PipelineSubscriber,
-} from "../../types";
+import { eq } from 'drizzle-orm';
+import { db } from '../client';
+import { pipelines, pipeline_subscribers } from '../schema';
+import type { CreatePipelineBody, Pipeline, PipelineSubscriber } from '../../types';
 
-export async function createPipeline(
-  data: CreatePipelineBody,
-): Promise<Pipeline> {
+export async function createPipeline(data: CreatePipelineBody): Promise<Pipeline> {
   return await db.transaction(async (tx) => {
     const [pipeline] = await tx
       .insert(pipelines)
@@ -21,9 +15,7 @@ export async function createPipeline(
       .returning();
 
     for (const url of data.subscriber_urls) {
-      await tx
-        .insert(pipeline_subscribers)
-        .values({ pipeline_id: pipeline!.id, url });
+      await tx.insert(pipeline_subscribers).values({ pipeline_id: pipeline!.id, url });
     }
 
     return pipeline as Pipeline;
@@ -39,19 +31,14 @@ export async function getPipelineById(id: string): Promise<Pipeline | null> {
   return (result[0] ?? null) as Pipeline | null;
 }
 
-export async function getPipelineByToken(
-  token: string,
-): Promise<Pipeline | null> {
-  const result = await db
-    .select()
-    .from(pipelines)
-    .where(eq(pipelines.source_token, token));
+export async function getPipelineByToken(token: string): Promise<Pipeline | null> {
+  const result = await db.select().from(pipelines).where(eq(pipelines.source_token, token));
   return (result[0] ?? null) as Pipeline | null;
 }
 
 export async function updatePipeline(
   id: string,
-  data: Partial<CreatePipelineBody>,
+  data: Partial<CreatePipelineBody>
 ): Promise<Pipeline | null> {
   const result = await db
     .update(pipelines)
@@ -67,20 +54,15 @@ export async function updatePipeline(
 }
 
 export async function deletePipeline(id: string): Promise<boolean> {
-  const result = await db
-    .delete(pipelines)
-    .where(eq(pipelines.id, id))
-    .returning();
+  const result = await db.delete(pipelines).where(eq(pipelines.id, id)).returning();
   return result.length > 0;
 }
 
 export async function getSubscribersByPipelineId(
-  pipelineId: string,
+  pipelineId: string
 ): Promise<PipelineSubscriber[]> {
   return db
     .select()
     .from(pipeline_subscribers)
-    .where(eq(pipeline_subscribers.pipeline_id, pipelineId)) as Promise<
-    PipelineSubscriber[]
-  >;
+    .where(eq(pipeline_subscribers.pipeline_id, pipelineId)) as Promise<PipelineSubscriber[]>;
 }

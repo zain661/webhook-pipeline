@@ -1,11 +1,9 @@
-import { eq } from "drizzle-orm";
-import { db } from "../client";
-import { delivery_attempts } from "../schema";
-import type { DeliveryAttempt } from "../../types";
+import { eq } from 'drizzle-orm';
+import { db } from '../client';
+import { delivery_attempts } from '../schema';
+import type { DeliveryAttempt } from '../../types';
 
-export async function getDeliveryAttemptsByJobId(
-  jobId: string,
-): Promise<DeliveryAttempt[]> {
+export async function getDeliveryAttemptsByJobId(jobId: string): Promise<DeliveryAttempt[]> {
   const result = await db
     .select()
     .from(delivery_attempts)

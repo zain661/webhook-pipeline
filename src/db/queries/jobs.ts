@@ -1,16 +1,13 @@
-import { eq, desc, and } from "drizzle-orm";
-import { db } from "../client";
-import { jobs } from "../schema";
-import type { Job } from "../../types";
+import { eq, desc, and } from 'drizzle-orm';
+import { db } from '../client';
+import { jobs } from '../schema';
+import type { Job } from '../../types';
 
 export async function createJob(
   pipeline_id: string,
-  payload: Record<string, unknown>,
+  payload: Record<string, unknown>
 ): Promise<Job> {
-  const result = await db
-    .insert(jobs)
-    .values({ pipeline_id, payload })
-    .returning();
+  const result = await db.insert(jobs).values({ pipeline_id, payload }).returning();
   return result[0] as Job;
 }
 
@@ -25,7 +22,7 @@ export async function getAllJobs(): Promise<Job[]> {
 }
 
 export async function getPendingJobs(): Promise<Job[]> {
-  const result = await db.select().from(jobs).where(eq(jobs.status, "pending"));
+  const result = await db.select().from(jobs).where(eq(jobs.status, 'pending'));
   return result as Job[];
 }
 
@@ -33,7 +30,7 @@ export async function updateJobStatus(
   id: string,
   status: string,
   result?: Record<string, unknown>,
-  error?: string,
+  error?: string
 ): Promise<void> {
   await db
     .update(jobs)
@@ -41,9 +38,7 @@ export async function updateJobStatus(
       status,
       ...(result && { result }),
       ...(error && { error }),
-      ...(status === "completed" || status === "failed"
-        ? { processed_at: new Date() }
-        : {}),
+      ...(status === 'completed' || status === 'failed' ? { processed_at: new Date() } : {}),
     })
     .where(eq(jobs.id, id));
 }

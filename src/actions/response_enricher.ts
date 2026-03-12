@@ -13,7 +13,7 @@ interface EnricherConfig {
 export function runResponseEnricher(
   payload: Record<string, unknown>,
   config: Record<string, unknown>,
-  pipelineId: string,
+  pipelineId: string
 ): Record<string, unknown> {
   const result = { ...payload };
   const cfg = config as EnricherConfig;
@@ -35,7 +35,7 @@ export function runResponseEnricher(
 
   // e.g. classification: "critical" → "P1 - Respond within 1 hour"
   if (cfg.priorityMap && cfg.prioritySource) {
-    const classificationValue = String(result[cfg.prioritySource] ?? "");
+    const classificationValue = String(result[cfg.prioritySource] ?? '');
     const responseWindow = cfg.priorityMap[classificationValue];
     if (responseWindow) {
       result.responseWindow = responseWindow;

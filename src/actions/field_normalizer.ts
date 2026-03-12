@@ -5,7 +5,7 @@ interface NormalizerConfig {
 
 export function runFieldNormalizer(
   payload: Record<string, unknown>,
-  config: Record<string, unknown>,
+  config: Record<string, unknown>
 ): Record<string, unknown> {
   const result = { ...payload };
   const cfg = config as NormalizerConfig;

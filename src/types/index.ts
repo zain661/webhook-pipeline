@@ -1,10 +1,10 @@
 export type ActionType =
-  | "field_normalizer"
-  | "severity_classifier"
-  | "keyword_alert"
-  | "response_enricher";
-export type JobStatus = "pending" | "processing" | "completed" | "failed";
-export type DeliveryStatus = "success" | "failed";
+  | 'field_normalizer'
+  | 'severity_classifier'
+  | 'keyword_alert'
+  | 'response_enricher';
+export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type DeliveryStatus = 'success' | 'failed';
 
 export interface Pipeline {
   id: string;

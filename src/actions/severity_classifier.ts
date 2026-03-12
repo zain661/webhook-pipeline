@@ -1,5 +1,5 @@
 interface SeverityLevel {
-  operator: "gte" | "gt" | "lte" | "lt" | "eq";
+  operator: 'gte' | 'gt' | 'lte' | 'lt' | 'eq';
   value: number;
 }
 
@@ -13,22 +13,18 @@ interface ClassifierConfig {
   drop_below?: number;
 }
 
-function checkOperator(
-  actual: number,
-  operator: string,
-  value: number,
-): boolean {
-  if (operator === "gte") return actual >= value;
-  if (operator === "gt") return actual > value;
-  if (operator === "lte") return actual <= value;
-  if (operator === "lt") return actual < value;
-  if (operator === "eq") return actual === value;
+function checkOperator(actual: number, operator: string, value: number): boolean {
+  if (operator === 'gte') return actual >= value;
+  if (operator === 'gt') return actual > value;
+  if (operator === 'lte') return actual <= value;
+  if (operator === 'lt') return actual < value;
+  if (operator === 'eq') return actual === value;
   return false;
 }
 
 export function runSeverityClassifier(
   payload: Record<string, unknown>,
-  config: Record<string, unknown>,
+  config: Record<string, unknown>
 ): Record<string, unknown> | null {
   const cfg = config as unknown as ClassifierConfig;
   const severityValue = payload[cfg.severity_field] as number;
@@ -38,32 +34,24 @@ export function runSeverityClassifier(
   }
 
   // classify the report
-  let classification = "low";
+  let classification = 'low';
   let escalate = false;
 
   if (cfg.levels) {
     if (
       cfg.levels.critical &&
-      checkOperator(
-        severityValue,
-        cfg.levels.critical.operator,
-        cfg.levels.critical.value,
-      )
+      checkOperator(severityValue, cfg.levels.critical.operator, cfg.levels.critical.value)
     ) {
-      classification = "critical";
+      classification = 'critical';
       escalate = true;
     } else if (
       cfg.levels.high &&
-      checkOperator(
-        severityValue,
-        cfg.levels.high.operator,
-        cfg.levels.high.value,
-      )
+      checkOperator(severityValue, cfg.levels.high.operator, cfg.levels.high.value)
     ) {
-      classification = "high";
+      classification = 'high';
       escalate = true;
     } else {
-      classification = "low";
+      classification = 'low';
       escalate = false;
     }
   }

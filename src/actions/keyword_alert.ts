@@ -7,14 +7,14 @@ interface KeywordConfig {
 
 export function runKeywordAlert(
   payload: Record<string, unknown>,
-  config: Record<string, unknown>,
+  config: Record<string, unknown>
 ): Record<string, unknown> | null {
   const cfg = config as unknown as KeywordConfig;
-  const textToScan = String(payload[cfg.scan_field] ?? "").toLowerCase();
-  const flagField = cfg.flag_field ?? "keyword_alert_triggered";
+  const textToScan = String(payload[cfg.scan_field] ?? '').toLowerCase();
+  const flagField = cfg.flag_field ?? 'keyword_alert_triggered';
 
   const matchedKeywords = cfg.critical_keywords.filter((keyword) =>
-    textToScan.includes(keyword.toLowerCase()),
+    textToScan.includes(keyword.toLowerCase())
   );
 
   const hasMatch = matchedKeywords.length > 0;
