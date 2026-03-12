@@ -1,0 +1,49 @@
+{
+  "name": "webhook-pipeline",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "ts-node src/api/server.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "worker": "ts-node src/worker/worker.ts",
+    "mock": "ts-node src/scripts/mock-subscriber.ts",
+    "simulate": "ts-node src/scripts/simulate.ts",
+    "build": "tsc",
+    "start": "node dist/api/server.js",
+    "start:worker": "node dist/worker/worker.ts",
+    "db:migrate:prod": "ts-node src/db/migrate.ts",
+    "format:write": "prettier --write \"src/**/*.{js,ts,json,css,md}\"",
+    "format:check": "prettier --check \"src/**/*.{js,ts,json,css,md}\"",
+    "lint": "eslint ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.3.5",
+    "@types/pg": "^8.18.0",
+    "drizzle-kit": "^0.31.9",
+    "eslint": "^10.0.3",
+    "eslint-plugin-security": "^4.0.0",
+    "globals": "^17.4.0",
+    "jest": "^30.3.0",
+    "prettier": "^3.8.1",
+    "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.45.1",
+    "express": "^5.2.1",
+    "pg": "^8.20.0"
+  }
+}
