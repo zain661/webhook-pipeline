@@ -1,0 +1,60 @@
+services:
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: webhook_pipeline
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build: .
+    command: npm run db:migrate:prod
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/webhook_pipeline
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: .
+    command: node dist/api/server.js
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/webhook_pipeline
+      PORT: 3000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: node dist/worker/worker.js
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/webhook_pipeline
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  mock:
+    build: .
+    command: node dist/scripts/mock-subscriber.js
+    ports:
+      - "3001:3001"
+
+volumes:
+  postgres_data:
