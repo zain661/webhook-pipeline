@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "ts-node src/api/server.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -15,6 +14,7 @@
     "start": "node dist/api/server.js",
     "start:worker": "node dist/worker/worker.ts",
     "db:migrate:prod": "ts-node src/db/migrate.ts",
+    "test": "vitest --run",
     "format:write": "prettier --write \"src/**/*.{js,ts,json,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{js,ts,json,css,md}\"",
     "lint": "eslint ."
@@ -26,19 +26,17 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
-    "@types/jest": "^30.0.0",
     "@types/node": "^25.3.5",
     "@types/pg": "^8.18.0",
     "drizzle-kit": "^0.31.9",
     "eslint": "^10.0.3",
     "eslint-plugin-security": "^4.0.0",
     "globals": "^17.4.0",
-    "jest": "^30.3.0",
     "prettier": "^3.8.1",
-    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.0"
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "dotenv": "^17.3.1",
