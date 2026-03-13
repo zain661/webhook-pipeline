@@ -31,7 +31,7 @@ router.post('/ingest/:token', async (req: Request<{ token: string }>, res: Respo
       message: 'Webhook received, job queued',
       job_id: job.id,
     });
-  } catch (_err) {
+  } catch {
     res.status(500).json({ error: 'Failed to ingest webhook' });
   }
 });
