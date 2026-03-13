@@ -27,7 +27,9 @@ function section(title: string) {
 async function simulate() {
   console.log('🌍 Starting Humanitarian Aid Pipeline Simulation\n');
 
+  // ─────────────────────────────────────────
   section('PIPELINE 1: Severity Classifier');
+  // ─────────────────────────────────────────
 
   const p1 = (await post(`${BASE_URL}/pipelines`, {
     name: 'Medical Emergency Pipeline',
@@ -76,7 +78,9 @@ async function simulate() {
   })) as { job_id: string };
   console.log(`Job queued: ${j3.job_id} (will be dropped)`);
 
+  // ─────────────────────────────────────────
   section('PIPELINE 2: Field Normalizer');
+  // ─────────────────────────────────────────
 
   const p2 = (await post(`${BASE_URL}/pipelines`, {
     name: 'UNRWA Field Reports Normalizer',
@@ -115,7 +119,9 @@ async function simulate() {
   })) as { job_id: string };
   console.log(`Job queued: ${j5.job_id}`);
 
+  // ─────────────────────────────────────────
   section('PIPELINE 3: Keyword Alert');
+  // ─────────────────────────────────────────
 
   const p3 = (await post(`${BASE_URL}/pipelines`, {
     name: 'Critical Keyword Scanner',
@@ -150,7 +156,9 @@ async function simulate() {
   })) as { job_id: string };
   console.log(`Job queued: ${j7.job_id}`);
 
+  // ─────────────────────────────────────────
   section('PIPELINE 4: Response Enricher');
+  // ─────────────────────────────────────────
 
   const p4 = (await post(`${BASE_URL}/pipelines`, {
     name: 'Response Metadata Enricher',
@@ -186,19 +194,21 @@ async function simulate() {
   })) as { job_id: string };
   console.log(`Job queued: ${j8.job_id}`);
 
+  // ─────────────────────────────────────────
   section('Waiting for worker to process all jobs...');
+  // ─────────────────────────────────────────
+
   console.log('⏳ Waiting 6 seconds...');
   await sleep(6000);
 
+  // ─────────────────────────────────────────
   section('Checking Job Results');
+  // ─────────────────────────────────────────
 
   const jobIds = [
     { id: j1.job_id, label: 'CRITICAL medical (should be completed)' },
     { id: j2.job_id, label: 'HIGH supply (should be completed)' },
-    {
-      id: j3.job_id,
-      label: 'LOW routine (should be dropped/completed, 0 deliveries)',
-    },
+    { id: j3.job_id, label: 'LOW routine (should be dropped/completed, 0 deliveries)' },
     { id: j4.job_id, label: 'UNRWA format normalized' },
     { id: j6.job_id, label: 'Keyword match flagged' },
     { id: j8.job_id, label: 'Enriched with metadata' },
@@ -226,6 +236,261 @@ async function simulate() {
 
   section('Simulation Complete ✅');
   console.log('Check docker compose logs mock for full delivery details\n');
+
+  // Run performance tests
+  await firstJobLatencyTest();
+  await loadTest();
+  await priorityTest();
+}
+
+// ─────────────────────────────────────────────────────────
+// TEST 1: First job latency
+// Shows: how fast does ONE job get picked up and processed?
+// Polling: up to 3000ms delay
+// BullMQ: ~50-100ms instant
+// ─────────────────────────────────────────────────────────
+async function firstJobLatencyTest() {
+  section('TEST 1: First Job Latency — Webhook → Completed');
+
+  const p = (await post(`${BASE_URL}/pipelines`, {
+    name: 'Latency Test Pipeline',
+    action_type: 'severity_classifier',
+    action_config: {
+      severity_field: 'severity_score',
+      drop_below: 1,
+      levels: { critical: { operator: 'gte', value: 8 } },
+    },
+    subscriber_urls: ['http://mock:3001/coordination'],
+  })) as { id: string; source_token: string };
+
+  console.log('⏱️  Sending 1 job and measuring time until completed...\n');
+
+  const start = Date.now();
+
+  const job = (await post(`${BASE_URL}/webhooks/ingest/${p.source_token}`, {
+    event: 'latency.test',
+    severity_score: 9,
+    location: 'Test Location',
+  })) as { job_id: string };
+
+  // Poll every 100ms until completed
+  let latency = 0;
+  for (let i = 0; i < 100; i++) {
+    await sleep(100);
+    const status = await get(`${BASE_URL}/jobs/${job.job_id}/status`);
+    if (status.status === 'completed') {
+      latency = Date.now() - start;
+      break;
+    }
+  }
+
+  console.log(`   Job ID: ${job.job_id.slice(0, 8)}...`);
+  console.log(`   ⚡ Completed in: ${latency}ms`);
+
+  if (latency < 500) {
+    console.log(`   ✅ FAST — Event-driven (BullMQ) approach`);
+    console.log(`   Jobs are picked up instantly from the queue`);
+  } else if (latency < 3500) {
+    console.log(`   ⏳ MODERATE — likely polling approach`);
+    console.log(`   Worker waited for next poll cycle before processing`);
+  } else {
+    console.log(`   🐌 SLOW — polling with high interval`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// TEST 2: Load test — increasing batch sizes
+// Shows: how does the system handle burst traffic?
+// Polling: linear growth (each job waits for poll)
+// BullMQ: scales with concurrency (5 at a time)
+// ─────────────────────────────────────────────────────────
+async function loadTest() {
+  section('TEST 2: Load Test — Burst Traffic at Scale');
+
+  const p = (await post(`${BASE_URL}/pipelines`, {
+    name: 'Load Test Pipeline',
+    action_type: 'severity_classifier',
+    action_config: {
+      severity_field: 'severity_score',
+      drop_below: 1,
+      levels: {
+        critical: { operator: 'gte', value: 8 },
+        high: { operator: 'gte', value: 5 },
+      },
+    },
+    subscriber_urls: ['http://mock:3001/coordination'],
+  })) as { id: string; source_token: string };
+
+  console.log('Sending increasing batches simultaneously and measuring throughput:\n');
+
+  const results: { count: number; queuedIn: number; totalTime: number; throughput: number }[] = [];
+
+  for (const count of [10, 50, 100]) {
+    process.stdout.write(`   📦 ${count} jobs: queuing...`);
+
+    const start = Date.now();
+
+    // Send ALL jobs simultaneously
+    const jobs = (await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        post(`${BASE_URL}/webhooks/ingest/${p.source_token}`, {
+          event: 'load.test',
+          report_number: i + 1,
+          severity_score: Math.floor(Math.random() * 10) + 1,
+          location: `Location ${i + 1}`,
+        })
+      )
+    )) as { job_id: string }[];
+
+    const queuedIn = Date.now() - start;
+    process.stdout.write(` queued in ${queuedIn}ms, processing`);
+
+    // Poll until ALL completed — no artificial sleep
+    let completed = 0;
+    while (completed < count) {
+      await sleep(300);
+      const statuses = await Promise.all(
+        jobs.map((j) => get(`${BASE_URL}/jobs/${j.job_id}/status`))
+      );
+      completed = statuses.filter((s) => s.status === 'completed').length;
+      process.stdout.write('.');
+    }
+
+    const totalTime = Date.now() - start;
+    const throughput = Math.round(count / (totalTime / 1000));
+
+    results.push({ count, queuedIn, totalTime, throughput });
+    console.log(` done!`);
+    console.log(`      ⚡ Queued in:   ${queuedIn}ms`);
+    console.log(`      ✅ Total time:  ${totalTime}ms`);
+    console.log(`      📊 Avg/job:     ${Math.round(totalTime / count)}ms`);
+    console.log(`      🚀 Throughput:  ${throughput} jobs/sec\n`);
+  }
+
+  // Summary table
+  console.log('   ┌─────────┬──────────────┬─────────────┬──────────────────┐');
+  console.log('   │  Jobs   │  Total Time  │  Avg/job    │  Throughput      │');
+  console.log('   ├─────────┼──────────────┼─────────────┼──────────────────┤');
+  for (const r of results) {
+    const jobs = String(r.count).padEnd(7);
+    const time = `${r.totalTime}ms`.padEnd(12);
+    const avg = `${Math.round(r.totalTime / r.count)}ms`.padEnd(11);
+    const tp = `${r.throughput} jobs/sec`.padEnd(16);
+    console.log(`   │ ${jobs} │ ${time} │ ${avg} │ ${tp} │`);
+  }
+  console.log('   └─────────┴──────────────┴─────────────┴──────────────────┘');
+
+  // Scaling analysis
+  const first = results[0];
+  const last = results[results.length - 1];
+  const scalingFactor = (last.totalTime / last.count / (first.totalTime / first.count)).toFixed(2);
+
+  console.log(
+    `\n   📈 Scaling factor: ${scalingFactor}x avg time increase from ${first.count} → ${last.count} jobs`
+  );
+  if (Number(scalingFactor) < 1.5) {
+    console.log(`   ✅ SCALES WELL — avg time stays low as load increases (BullMQ concurrency)`);
+  } else {
+    console.log(`   ⚠️  LINEAR GROWTH — avg time grows with load (polling bottleneck)`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// TEST 3: Priority queue
+// Shows: critical reports jump ahead of routine ones
+// Polling: FIFO only — no priority
+// BullMQ: priority 1 (critical) processes before priority 10
+// ─────────────────────────────────────────────────────────
+async function priorityTest() {
+  section('TEST 3: Priority Queue — Critical Reports First');
+
+  const p = (await post(`${BASE_URL}/pipelines`, {
+    name: 'Priority Test Pipeline',
+    action_type: 'severity_classifier',
+    action_config: {
+      severity_field: 'severity_score',
+      drop_below: 1,
+      levels: { critical: { operator: 'gte', value: 8 } },
+    },
+    subscriber_urls: ['http://mock:3001/emergency'],
+  })) as { id: string; source_token: string };
+
+  console.log('Sending 20 ROUTINE reports then 1 CRITICAL simultaneously');
+  console.log('Critical should process before remaining routine ones...\n');
+
+  // Send 20 routine + 1 critical ALL at the same time
+  // so they all land in queue together
+  const allJobs = (await Promise.all([
+    // 20 routine reports
+    ...Array.from({ length: 20 }, (_, i) =>
+      post(`${BASE_URL}/webhooks/ingest/${p.source_token}`, {
+        event: `routine.${i + 1}`,
+        severity_score: 3,
+        location: `Routine Location ${i + 1}`,
+      })
+    ),
+    // 1 critical — sent simultaneously with all routine
+    post(`${BASE_URL}/webhooks/ingest/${p.source_token}`, {
+      event: 'CRITICAL.airstrike',
+      severity_score: 9,
+      location: 'Al Shifa Hospital',
+    }),
+  ])) as { job_id: string }[];
+
+  const criticalJob = allJobs[allJobs.length - 1];
+  const routineJobs = allJobs.slice(0, 20);
+
+  console.log(`   🔴 Critical job: ${criticalJob.job_id.slice(0, 8)}...`);
+  console.log(`   📋 Routine jobs: ${routineJobs.length} sent simultaneously\n`);
+
+  // Wait for all to complete
+  let allDone = false;
+  while (!allDone) {
+    await sleep(300);
+    const statuses = await Promise.all(
+      allJobs.map((j) => get(`${BASE_URL}/jobs/${j.job_id}/status`))
+    );
+    allDone = statuses.every((s) => s.status === 'completed');
+  }
+
+  // Check processing order by processed_at timestamp
+  const criticalResult = await get(`${BASE_URL}/jobs/${criticalJob.job_id}/history`);
+  const routineResults = await Promise.all(
+    routineJobs.map((j) => get(`${BASE_URL}/jobs/${j.job_id}/history`))
+  );
+
+  const criticalTime = new Date(criticalResult.processed_at).getTime();
+  const routineProcessedBefore = routineResults.filter(
+    (r) => new Date(r.processed_at).getTime() < criticalTime
+  ).length;
+
+  // Sort all by processed_at to show order
+  const allResults = [
+    { id: criticalJob.job_id.slice(0, 8), type: '🔴 CRITICAL', time: criticalTime },
+    ...routineResults.map((r, i) => ({
+      id: routineJobs[i].job_id.slice(0, 8),
+      type: '📋 routine',
+      time: new Date(r.processed_at).getTime(),
+    })),
+  ].sort((a, b) => a.time - b.time);
+
+  console.log('   Processing order (by processed_at):');
+  allResults.slice(0, 8).forEach((r, i) => {
+    console.log(`   ${i + 1}. ${r.type} ${r.id}...`);
+  });
+  if (allResults.length > 8) console.log(`   ... and ${allResults.length - 8} more`);
+
+  console.log(`\n   Routine jobs processed before critical: ${routineProcessedBefore}/20`);
+
+  if (routineProcessedBefore <= 4) {
+    console.log(`\n   ✅ PRIORITY WORKS — Critical jumped ahead of most routine jobs ⭐`);
+    console.log(`   (Some overlap is expected due to 5 concurrent workers)`);
+  } else if (routineProcessedBefore <= 10) {
+    console.log(`\n   ⚠️  PARTIAL PRIORITY — Critical got some advantage`);
+  } else {
+    console.log(`\n   ❌ NO PRIORITY — Pure FIFO order`);
+    console.log(`   On polling branch this is expected behavior`);
+  }
 }
 
 simulate().catch(console.error);
