@@ -1,22 +1,25 @@
-import { getPendingJobs, updateJobStatus } from '../db/queries/jobs';
+import { Worker } from 'bullmq';
+import { connection } from '../queues/jobQueue';
+import { getJobById, updateJobStatus } from '../db/queries/jobs';
 import { getPipelineById, getSubscribersByPipelineId } from '../db/queries/pipelines';
 import { runAction } from '../actions';
 import { deliverToSubscriber } from './delivery';
 
-const POLL_INTERVAL = 3000; // check every 3 seconds
+const CONCURRENCY = 5; // process 5 jobs simultaneously
 
-async function processJob(jobId: string): Promise<void> {
-  console.log(`Processing job ${jobId}`);
+const worker = new Worker(
+  'jobs',
+  async (queueJob) => {
+    const { jobId } = queueJob.data as { jobId: string };
+    console.log(`Processing job ${jobId}`);
 
-  await updateJobStatus(jobId, 'processing');
+    await updateJobStatus(jobId, 'processing');
 
-  try {
-    const { getJobById } = await import('../db/queries/jobs');
     const job = await getJobById(jobId);
-    if (!job) throw new Error('Job not found');
+    if (!job) throw new Error(`Job ${jobId} not found`);
 
     const pipeline = await getPipelineById(job.pipeline_id);
-    if (!pipeline) throw new Error('Pipeline not found');
+    if (!pipeline) throw new Error(`Pipeline ${job.pipeline_id} not found`);
 
     const result = runAction(job.payload, pipeline);
 
@@ -32,26 +35,26 @@ async function processJob(jobId: string): Promise<void> {
     for (const subscriber of subscribers) {
       await deliverToSubscriber(jobId, subscriber, result);
     }
-  } catch (err) {
-    console.error(`Job ${jobId} failed:`, err);
-    await updateJobStatus(jobId, 'failed', undefined, String(err));
+  },
+  {
+    connection,
+    concurrency: CONCURRENCY,
   }
-}
+);
 
-async function poll(): Promise<void> {
-  try {
-    const pendingJobs = await getPendingJobs();
+worker.on('completed', (job) => {
+  console.log(`✅ Job ${job.data.jobId} completed`);
+});
 
-    for (const job of pendingJobs) {
-      await processJob(job.id);
-    }
-  } catch (err) {
-    console.error('Worker poll error:', err);
+worker.on('failed', async (job, err) => {
+  console.error(`❌ Job ${job?.data.jobId} failed:`, err.message);
+  if (job?.data.jobId) {
+    await updateJobStatus(job.data.jobId, 'failed', undefined, err.message);
   }
+});
 
-  // Schedule next poll
-  setTimeout(poll, POLL_INTERVAL);
-}
+worker.on('error', (err) => {
+  console.error('Worker error:', err.message);
+});
 
-console.log('Worker started, polling every', POLL_INTERVAL / 1000, 'seconds');
-poll();
+console.log(`🚀 Worker started with BullMQ — concurrency: ${CONCURRENCY}`);
