@@ -55,7 +55,7 @@ jobs:
             --max-instances=3 \
             --command="node" \
             --args="dist/api/server.js" \
-            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }},REDIS_URL=${{ secrets.REDIS_URL }},PORT=3000"
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }},REDIS_URL=${{ secrets.REDIS_URL }}"
 
       - name: Deploy Worker to Cloud Run
         run: |
