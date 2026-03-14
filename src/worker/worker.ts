@@ -4,6 +4,21 @@ import { getJobById, updateJobStatus } from '../db/queries/jobs';
 import { getPipelineById, getSubscribersByPipelineId } from '../db/queries/pipelines';
 import { runAction } from '../actions';
 import { deliverToSubscriber } from './delivery';
+import http from 'http';
+
+// ─────────────────────────────────────────
+// Health check server — required for Cloud Run
+// Cloud Run needs an HTTP server to verify
+// the container is healthy and ready
+// ─────────────────────────────────────────
+const healthServer = http.createServer((_req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ status: 'ok', service: 'worker' }));
+});
+
+healthServer.listen(8080, () => {
+  console.log('Health check server listening on port 8080');
+});
 
 const CONCURRENCY = 5; // process 5 jobs simultaneously
 
