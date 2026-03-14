@@ -536,7 +536,43 @@ Webhooks can have any shape. Action configs vary by type. JSONB lets each pipeli
 **Why exponential backoff for retries?**
 A subscriber that is temporarily down should not be hammered with requests. 4 attempts over ~30 minutes covers most transient failures. The delivery attempt history is stored in the database so you can inspect exactly what happened to every delivery.
 
+**Security — ESLint object injection rule**
+The `security/detect-object-injection` ESLint rule is disabled in this project with documented intent. The rule flags dynamic object property access (`obj[variable]`) as a potential prototype pollution risk. In this codebase, the two locations that trigger it are safe:
+
+- `field_normalizer.ts` — the key (`standardName`) comes from `action_config`, which is set by the pipeline creator at setup time, not from the incoming webhook payload.
+- `response_enricher.ts` — the key (`classificationValue`) is derived from a controlled classification result (`"critical"`, `"high"`, `"low"`), not arbitrary user input.
+
+In a production system, the fix would be to replace direct bracket access with `Object.prototype.hasOwnProperty.call()` checks and sanitize config values at pipeline creation time.
+
 ---
+
+## Live Demo
+
+The API is deployed on Google Cloud Run:
+```
+https://webhook-pipeline-api-63h2nwxy3q-ew.a.run.app
+```
+```bash
+# Health check
+curl https://webhook-pipeline-api-63h2nwxy3q-ew.a.run.app/health
+
+# Create a pipeline
+curl -X POST https://webhook-pipeline-api-63h2nwxy3q-ew.a.run.app/pipelines \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Pipeline",
+    "action_type": "severity_classifier",
+    "action_config": {
+      "severity_field": "severity_score",
+      "drop_below": 3,
+      "levels": {
+        "critical": { "operator": "gte", "value": 8 },
+        "high":     { "operator": "gte", "value": 5 }
+      }
+    },
+    "subscriber_urls": ["https://webhook.site/your-id"]
+  }'
+```
 
 ## Branches
 
