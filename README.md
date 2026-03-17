@@ -1,12 +1,12 @@
 # Webhook Pipeline
 
-A webhook-driven task processing pipeline inspired by Zapier — built for **Humanitarian Aid Intelligence**. Field teams from different NGOs send reports in different formats; this system normalizes, classifies, and routes them to the right coordination teams automatically.
+A webhook-driven task processing pipeline inspired by Zapier, built for **Humanitarian Aid Intelligence**. Field teams from different NGOs send reports in different formats; this system normalizes, classifies, and routes them to the right coordination teams automatically.
 
 ---
 
 ## The Problem This Solves
 
-NGOs operating in conflict zones use different field systems with different data formats. A report from UNRWA uses `area`, while Red Crescent uses `zone`, while a local NGO uses `region`. Coordinators are overwhelmed by noise — critical alerts get lost in routine updates. This pipeline:
+NGOs operating in conflict zones use different field systems with different data formats. A report from UNRWA uses `area`, while the Red Crescent uses `zone`, and a local NGO uses `region`. Coordinators are overwhelmed by noise, and critical alerts get lost in routine updates. This pipeline:
 
 - **Normalizes** inconsistent field names into a standard format
 - **Classifies** reports by severity and drops low-priority noise
@@ -36,13 +36,13 @@ Field Report  ──►   POST /webhooks  ──►   BullMQ Queue  ──►  5
 
 **Key design decisions:**
 
-1. **Database as source of truth** — The API and worker never talk directly. The database stores every job permanently. Redis is only the notification layer — if Redis restarts, no jobs are lost.
+1. **Database as source of truth** : The API and worker never talk directly. The database stores every job permanently. Redis is only the notification layer — if Redis restarts, no jobs are lost.
 
-2. **Event-driven over polling** — Jobs are processed the moment they arrive in the queue (not every 3 seconds). First job latency: ~330ms vs ~1216ms with polling.
+2. **Event-driven over polling**: Jobs are processed the moment they arrive in the queue (not every 3 seconds). First job latency: ~330ms vs ~1216ms with polling.
 
-3. **Priority queue** — Critical reports (severity ≥ 8) get priority 1 and jump ahead of routine reports (priority 10). In disaster scenarios, order of processing matters.
+3. **Priority queue**: Critical reports (severity ≥ 8) get priority 1 and jump ahead of routine reports (priority 10). In disaster scenarios, order of processing matters.
 
-4. **5 concurrent workers** — BullMQ processes 5 jobs simultaneously. At 100 concurrent jobs: 47 jobs/sec vs 21 jobs/sec with polling.
+4. **5 concurrent workers**: BullMQ processes 5 jobs simultaneously. At 100 concurrent jobs: 47 jobs/sec vs 21 jobs/sec with polling.
 
 ---
 
@@ -183,7 +183,7 @@ docker compose up --build
 This starts 6 services automatically:
 - `postgres` — database on port 5433
 - `redis` — queue broker on port 6379
-- `migrate` — runs migrations once then exits
+- `migrate` — runs migrations once, then exits
 - `api` — HTTP server on port 3000
 - `worker` — BullMQ event-driven job processor
 - `mock` — fake subscriber server on port 3001
@@ -478,7 +478,7 @@ docker compose up --build
 npm run simulate
 ```
 
-The simulation runs 4 pipeline demos then 3 performance tests:
+The simulation runs 4 pipeline demos, then 3 performance tests:
 
 **Test 1 — Latency:** measures time from webhook to job completed
 
@@ -519,16 +519,16 @@ GitHub Actions runs on every push to `main` and `feature/*` branches:
 ## Design Decisions
 
 **Why BullMQ + Redis instead of polling?**
-The initial version used polling every 3 seconds (see `feature/polling-approach` branch). This worked but created two problems for disaster scenarios: up to 3 second delay before processing starts, and only 1 job processed at a time. BullMQ gives instant pickup (~330ms vs ~1216ms) and 5 concurrent workers. At 100 simultaneous jobs: 47 jobs/sec vs 21 jobs/sec. The tradeoff is one additional service (Redis) in the stack.
+The initial version used polling every 3 seconds (see `feature/polling-approach` branch). This worked but created two problems for disaster scenarios: up to 3 second delay before processing starts, and only 1 job is processed at a time. BullMQ gives instant pickup (~330ms vs ~1216ms) and 5 concurrent workers. At 100 simultaneous jobs: 47 jobs/sec vs 21 jobs/sec. The tradeoff is one additional service (Redis) in the stack.
 
 **Why is the database the source of truth, not Redis?**
 Redis is ephemeral — if it restarts, queue contents are lost. Every job is saved to PostgreSQL before being pushed to Redis. If Redis goes down, jobs are not lost — they can be requeued from the database. This is critical for a humanitarian system where losing a report is not acceptable.
 
 **Why priority queue?**
-In disaster scenarios, a field team's routine daily check should not block a hospital's emergency request. Reports with `severity_score >= 8` are pushed to the queue with priority 1. Everything else gets priority 10. BullMQ processes lower priority numbers first.
+In disaster scenarios, a field team's routine daily check should not block a hospital's emergency request. Reports with `severity_score >= 8` are pushed to the queue with priority 1. Everything else gets priority 10. BullMQ processes lower-priority numbers first.
 
 **Why separate containers for API and worker from the same image?**
-One Dockerfile builds one image. Docker Compose runs it with different commands. This is simpler than maintaining separate Dockerfiles while still giving full process isolation — either service can restart independently.
+One Dockerfile builds one image. Docker Compose runs it with different commands. This is simpler than maintaining separate Dockerfiles while still giving full process isolation; either service can restart independently.
 
 **Why JSONB for payload, result, and action_config?**
 Webhooks can have any shape. Action configs vary by type. JSONB lets each pipeline define its own schema without database migrations for every new field. TypeScript types enforce structure at the application layer.
